@@ -137,6 +137,13 @@
   ::-webkit-scrollbar-track{background:var(--bg1)}
   ::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:3px}
 
+  /* AI Button */
+  .ai-btn{background:linear-gradient(135deg,var(--purple),var(--pink));border:none;border-radius:8px;padding:8px 18px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;transition:all .2s;font-family:inherit}
+  .ai-btn:hover{transform:translateY(-1px);box-shadow:0 4px 15px rgba(159,122,250,.3)}
+  .ai-btn:disabled{opacity:.6;cursor:not-allowed;transform:none}
+  .ai-loading{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite;margin-right:6px;vertical-align:middle}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
   /* Calendar */
   .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
   .cal-header{font-size:11px;font-weight:600;color:var(--t3);text-align:center;padding:8px 0}
@@ -327,9 +334,10 @@
 <div class="card" style="margin-bottom:18px;border:1px solid rgba(159,122,250,.25);background:linear-gradient(135deg,var(--bg2),rgba(159,122,250,.03))">
   <div class="card-header">
     <div class="card-title"><span class="ic">🧠</span> AI 인사이트 분석</div>
-    <div class="card-badge" style="background:rgba(159,122,250,.15);color:var(--purple)">자동 분석</div>
+    <button class="ai-btn" id="aiAnalyzeBtn" onclick="runAIAnalysis()">✨ AI 실시간 분석</button>
   </div>
 
+  <div id="aiInsightContent">
   <!-- Insight cards grid -->
   <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px">
 
@@ -426,6 +434,7 @@
       </div>
     </div>
   </div>
+  </div><!-- /aiInsightContent -->
 </div>
 
 <!-- Recommendations -->
@@ -930,6 +939,105 @@ function changeCalMonth(delta) {
 }
 
 renderCalendar();
+
+// ===== 7. Gemini AI Analysis =====
+const GEMINI_KEY = 'AIzaSyAWQMw2btOFsqht177sg4y9IHdoaJnStF0';
+
+async function runAIAnalysis() {
+  const btn = document.getElementById('aiAnalyzeBtn');
+  const container = document.getElementById('aiInsightContent');
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="ai-loading"></span>Gemini 분석 중...';
+
+  const channelSummary = markets.map(m => {
+    const total = m.monthlySales.reduce((a,b) => a+b, 0);
+    const purchase = m.monthlyPurchase.reduce((a,b) => a+b, 0);
+    const roas = m.adSpend ? (total / m.adSpend.reduce((a,b)=>a+b,0) * 100).toFixed(0) + '%' : '-';
+    return `${m.name}(${m.type}): 월매출[${m.monthlySales.join(',')}]만, 매입합계 ${purchase}만, ROAS ${roas}`;
+  }).join('\n');
+
+  const prompt = `당신은 이커머스 매출·매입 데이터 분석 전문 컨설턴트입니다.
+아래 2026년 1~3월 실적 데이터를 분석하여 경영진 보고용 인사이트를 제공해주세요.
+
+[월별 실적 (단위: 만원)]
+1월: 매출 ${monthlySales[0]}, 매입 ${monthlyPurchase[0]}, 이익 ${monthlyProfit[0]}
+2월: 매출 ${monthlySales[1]}, 매입 ${monthlyPurchase[1]}, 이익 ${monthlyProfit[1]}
+3월: 매출 ${monthlySales[2]}, 매입 ${monthlyPurchase[2]}, 이익 ${monthlyProfit[2]}
+
+[전년 동기 매출]
+1월: ${lastYearSales[0]}만, 2월: ${lastYearSales[1]}만, 3월: ${lastYearSales[2]}만
+
+[채널별 누적 실적]
+${channelSummary}
+
+[연간 목표] 18억원
+
+다음 4개 섹션으로 분석해주세요. 각 섹션은 반드시 아래 이모지로 시작하고, 제목 한 줄 + 본문 2~3문장으로 구성하세요:
+
+✅ 긍정 시그널: (잘 되고 있는 부분)
+⚠️ 주의 사항: (우려되는 점)
+💡 기회 포착: (활용할 기회)
+🎯 액션 아이템: (즉시 실행할 3가지, 번호 매겨서)
+
+마크다운 서식 없이 plain text로, 한국어로, 간결하고 실무적으로 작성하세요.`;
+
+  try {
+    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + GEMINI_KEY, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+    });
+
+    if (!res.ok) throw new Error('API 응답 오류: ' + res.status);
+
+    const data = await res.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) throw new Error('응답 데이터 없음');
+
+    renderAIResult(container, text);
+  } catch(e) {
+    container.innerHTML = `
+      <div style="background:var(--bg3);border-radius:12px;padding:24px;text-align:center">
+        <div style="font-size:14px;color:var(--red);margin-bottom:8px">분석 중 오류가 발생했습니다</div>
+        <div style="font-size:12px;color:var(--t3)">${e.message}</div>
+      </div>`;
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = '🔄 다시 분석';
+}
+
+function renderAIResult(container, text) {
+  const markers = ['✅', '⚠️', '💡', '🎯'];
+  const colors  = ['var(--green)', 'var(--orange)', 'var(--blue)', 'var(--purple)'];
+  const lines = text.split('\n').filter(l => l.trim());
+  const sectionTexts = [[], [], [], []];
+  let cur = -1;
+
+  for (const line of lines) {
+    let matched = false;
+    for (let i = 0; i < markers.length; i++) {
+      if (line.includes(markers[i])) { cur = i; sectionTexts[i].push(line.trim()); matched = true; break; }
+    }
+    if (!matched && cur >= 0) sectionTexts[cur].push(line.trim());
+  }
+
+  let html = '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px">';
+  for (let i = 0; i < 4; i++) {
+    const title = sectionTexts[i][0] || markers[i];
+    const body  = sectionTexts[i].slice(1).join('<br>') || '분석 결과 없음';
+    html += `
+      <div style="background:var(--bg3);border-radius:12px;padding:18px;border-left:4px solid ${colors[i]}">
+        <div style="font-size:13px;font-weight:700;margin-bottom:8px;color:${colors[i]}">${title}</div>
+        <div style="font-size:12px;color:var(--t2);line-height:1.8">${body}</div>
+      </div>`;
+  }
+  html += '</div>';
+  html += `<div style="text-align:right;font-size:10px;color:var(--t4);margin-top:10px">Powered by Gemini AI · ${new Date().toLocaleString('ko-KR')} 분석</div>`;
+
+  container.innerHTML = html;
+}
 </script>
 </body>
 </html>
