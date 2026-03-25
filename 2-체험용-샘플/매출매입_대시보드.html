@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>2026 매출·매입 현황 대시보드</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700;800&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box}
+  :root{
+    --bg0:#090b10;--bg1:#0f1219;--bg2:#161b26;--bg3:#1c2333;--bg4:#242d3f;
+    --border:#253045;--border2:#2e3a52;
+    --t1:#edf0f7;--t2:#a0abbe;--t3:#687590;--t4:#4a5568;
+    --blue:#4c8dff;--blue2:#3672e8;--purple:#9f7afa;--green:#34d399;--green2:#22c55e;
+    --red:#f87171;--orange:#fb923c;--pink:#f472b6;--cyan:#22d3ee;--yellow:#facc15;
+    --indigo:#818cf8;
+  }
+  body{font-family:'Noto Sans KR',system-ui,sans-serif;background:var(--bg0);color:var(--t1);min-height:100vh}
+
+  /* Layout */
+  .top-bar{display:flex;justify-content:space-between;align-items:center;padding:20px 32px;border-bottom:1px solid var(--border)}
+  .top-bar h1{font-size:22px;font-weight:800}
+  .top-bar h1 span{background:linear-gradient(135deg,var(--blue),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+  .top-bar-right{display:flex;align-items:center;gap:16px}
+  .year-badge{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:6px 14px;font-size:13px;font-weight:600;color:var(--blue)}
+  .last-update{font-size:11px;color:var(--t3)}
+
+  .container{padding:24px 32px;max-width:1600px;margin:0 auto}
+
+  /* KPI Row */
+  .kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:24px}
+  .kpi{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:20px;position:relative;overflow:hidden;transition:transform .2s,border-color .2s}
+  .kpi:hover{transform:translateY(-2px);border-color:var(--blue)}
+  .kpi-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px}
+  .kpi-icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px}
+  .kpi-trend{font-size:11px;font-weight:600;padding:3px 8px;border-radius:6px}
+  .trend-up{background:rgba(52,211,153,.12);color:var(--green)}
+  .trend-down{background:rgba(248,113,113,.12);color:var(--red)}
+  .kpi-label{font-size:11px;color:var(--t3);margin-bottom:4px;font-weight:500;letter-spacing:.3px}
+  .kpi-value{font-size:28px;font-weight:800;letter-spacing:-.5px}
+  .kpi-sub{font-size:11px;color:var(--t4);margin-top:6px}
+  .kpi::after{content:'';position:absolute;bottom:0;left:0;right:0;height:3px}
+  .kpi:nth-child(1)::after{background:linear-gradient(90deg,var(--blue),var(--cyan))}
+  .kpi:nth-child(2)::after{background:linear-gradient(90deg,var(--red),var(--orange))}
+  .kpi:nth-child(3)::after{background:linear-gradient(90deg,var(--green),var(--cyan))}
+  .kpi:nth-child(4)::after{background:linear-gradient(90deg,var(--purple),var(--pink))}
+  .kpi:nth-child(5)::after{background:linear-gradient(90deg,var(--orange),var(--yellow))}
+  .kpi:nth-child(1) .kpi-icon{background:rgba(76,141,255,.12)}
+  .kpi:nth-child(2) .kpi-icon{background:rgba(248,113,113,.12)}
+  .kpi:nth-child(3) .kpi-icon{background:rgba(52,211,153,.12)}
+  .kpi:nth-child(4) .kpi-icon{background:rgba(159,122,250,.12)}
+  .kpi:nth-child(5) .kpi-icon{background:rgba(251,146,60,.12)}
+
+  /* Target gauge */
+  .gauge-wrap{display:flex;align-items:center;gap:10px;margin-top:8px}
+  .gauge-bar{flex:1;height:6px;background:var(--bg4);border-radius:3px;overflow:hidden}
+  .gauge-fill{height:100%;border-radius:3px;transition:width .8s ease}
+  .gauge-pct{font-size:13px;font-weight:700;min-width:42px;text-align:right}
+
+  /* Grid */
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px}
+  .grid3{display:grid;grid-template-columns:2fr 1fr;gap:18px;margin-bottom:18px}
+
+  /* Card */
+  .card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:22px}
+  .card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
+  .card-title{font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px}
+  .card-title .ic{font-size:16px}
+  .card-badge{font-size:10px;background:var(--bg4);color:var(--t3);padding:4px 10px;border-radius:6px;font-weight:500}
+
+  /* Tabs */
+  .tabs{display:flex;gap:4px;margin-bottom:18px}
+  .tab{padding:7px 16px;border-radius:8px;font-size:12px;font-weight:500;cursor:pointer;color:var(--t3);transition:all .2s;border:1px solid transparent}
+  .tab:hover{color:var(--t2);background:var(--bg3)}
+  .tab.active{background:var(--blue);color:#fff;border-color:var(--blue)}
+
+  /* Chart */
+  .chart-box{position:relative}
+
+  /* Table */
+  .tbl{width:100%;border-collapse:separate;border-spacing:0;font-size:13px}
+  .tbl th{text-align:left;padding:10px 14px;font-size:11px;font-weight:600;color:var(--t3);border-bottom:1px solid var(--border);letter-spacing:.3px;text-transform:uppercase}
+  .tbl td{padding:10px 14px;border-bottom:1px solid var(--border)}
+  .tbl tr:last-child td{border-bottom:none}
+  .tbl tbody tr{transition:background .15s;cursor:pointer}
+  .tbl tbody tr:hover{background:var(--bg3)}
+  .tbl .num{text-align:right;font-variant-numeric:tabular-nums}
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:8px}
+
+  /* Market cards */
+  .market-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .market-card{background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:16px;cursor:pointer;transition:all .2s;position:relative}
+  .market-card:hover{border-color:var(--blue);transform:translateY(-1px)}
+  .market-card.expanded{grid-column:1/-1;background:var(--bg1)}
+  .mc-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+  .mc-name{font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px}
+  .mc-status{font-size:10px;padding:3px 8px;border-radius:5px;font-weight:600}
+  .mc-status.active{background:rgba(52,211,153,.12);color:var(--green)}
+  .mc-status.paused{background:rgba(251,146,60,.12);color:var(--orange)}
+  .mc-status.ended{background:rgba(104,117,144,.15);color:var(--t3)}
+  .mc-row{display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px}
+  .mc-label{color:var(--t3)}
+  .mc-val{font-weight:600}
+  .mc-bar{height:4px;background:var(--bg4);border-radius:2px;margin-top:8px;overflow:hidden}
+  .mc-bar-fill{height:100%;border-radius:2px}
+  .mc-expand-icon{color:var(--t4);font-size:12px;transition:transform .2s}
+  .market-card.expanded .mc-expand-icon{transform:rotate(180deg)}
+
+  /* Detail panel */
+  .detail-panel{margin-top:14px;display:none;animation:fadeIn .3s ease}
+  .market-card.expanded .detail-panel{display:block}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+  .detail-chart{height:220px;margin-bottom:14px}
+  .detail-tbl{font-size:12px}
+  .detail-tbl th{font-size:10px;padding:8px 10px}
+  .detail-tbl td{padding:7px 10px}
+
+  /* Monthly mini bars */
+  .mini-bar-row{display:flex;align-items:end;gap:3px;height:40px}
+  .mini-bar{flex:1;border-radius:2px 2px 0 0;min-width:4px;transition:height .4s ease}
+
+  /* Badge */
+  .pct-badge{font-size:12px;font-weight:700;padding:2px 0}
+
+  /* Profit section */
+  .profit-row{display:flex;gap:14px;margin-top:10px}
+  .profit-item{flex:1;background:var(--bg3);border-radius:10px;padding:14px;text-align:center}
+  .profit-label{font-size:11px;color:var(--t3);margin-bottom:4px}
+  .profit-val{font-size:20px;font-weight:800}
+
+  /* Recommendation badge */
+  .rec-badge{display:inline-flex;align-items:center;gap:4px;background:linear-gradient(135deg,rgba(159,122,250,.12),rgba(244,114,182,.12));border:1px solid rgba(159,122,250,.2);border-radius:8px;padding:4px 12px;font-size:11px;color:var(--purple);font-weight:600;margin-right:6px;margin-bottom:6px}
+
+  /* Scrollbar */
+  ::-webkit-scrollbar{width:6px}
+  ::-webkit-scrollbar-track{background:var(--bg1)}
+  ::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:3px}
+
+  @media(max-width:1100px){
+    .kpi-row{grid-template-columns:repeat(3,1fr)}
+    .grid2,.grid3{grid-template-columns:1fr}
+    .market-grid{grid-template-columns:repeat(2,1fr)}
+  }
+  @media(max-width:700px){
+    .kpi-row{grid-template-columns:1fr 1fr}
+    .market-grid{grid-template-columns:1fr}
+    .container{padding:16px}
+  }
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <h1><span>2026</span> 매출·매입 현황 대시보드</h1>
+  <div class="top-bar-right">
+    <div class="year-badge">FY 2026</div>
+    <div class="last-update" id="lastUpdate"></div>
+  </div>
+</div>
+
+<div class="container">
+
+<!-- KPI Cards -->
+<div class="kpi-row">
+  <div class="kpi">
+    <div class="kpi-top">
+      <div class="kpi-icon">💰</div>
+      <div class="kpi-trend trend-up">▲ 18.3%</div>
+    </div>
+    <div class="kpi-label">누적 매출</div>
+    <div class="kpi-value" style="color:var(--blue)">4.87<span style="font-size:14px;color:var(--t3)"> 억원</span></div>
+    <div class="kpi-sub">1월~3월 누적</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-top">
+      <div class="kpi-icon">📦</div>
+      <div class="kpi-trend trend-up">▲ 12.1%</div>
+    </div>
+    <div class="kpi-label">누적 매입</div>
+    <div class="kpi-value" style="color:var(--red)">2.94<span style="font-size:14px;color:var(--t3)"> 억원</span></div>
+    <div class="kpi-sub">매입률 60.4%</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-top">
+      <div class="kpi-icon">📈</div>
+      <div class="kpi-trend trend-up">▲ 29.6%</div>
+    </div>
+    <div class="kpi-label">영업이익</div>
+    <div class="kpi-value" style="color:var(--green)">1.93<span style="font-size:14px;color:var(--t3)"> 억원</span></div>
+    <div class="kpi-sub">이익률 39.6%</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-top">
+      <div class="kpi-icon">🎯</div>
+      <div class="kpi-trend trend-up">순항 중</div>
+    </div>
+    <div class="kpi-label">연간 목표 달성률</div>
+    <div class="kpi-value" style="color:var(--purple)">27.1<span style="font-size:14px;color:var(--t3)"> %</span></div>
+    <div class="gauge-wrap">
+      <div class="gauge-bar"><div class="gauge-fill" style="width:27.1%;background:linear-gradient(90deg,var(--purple),var(--pink))"></div></div>
+      <div class="gauge-pct" style="color:var(--purple)">27.1%</div>
+    </div>
+    <div class="kpi-sub">목표: 18억원 / 현재: 4.87억원</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-top">
+      <div class="kpi-icon">⚡</div>
+      <div class="kpi-trend trend-up">▲ 18.3%</div>
+    </div>
+    <div class="kpi-label">전년 동기 대비 성장률</div>
+    <div class="kpi-value" style="color:var(--orange)">+18.3<span style="font-size:14px;color:var(--t3)"> %</span></div>
+    <div class="kpi-sub">2025 동기: 4.11억원</div>
+  </div>
+</div>
+
+<!-- Monthly Sales/Purchase Chart + Target -->
+<div class="grid3">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title"><span class="ic">📊</span> 월별 매출·매입 현황</div>
+      <div style="display:flex;gap:14px;font-size:11px;color:var(--t3)">
+        <span><span style="color:var(--blue)">●</span> 매출</span>
+        <span><span style="color:var(--red)">●</span> 매입</span>
+        <span><span style="color:var(--green)">●</span> 이익</span>
+        <span style="border-bottom:1.5px dashed var(--t4)">작년 매출</span>
+      </div>
+    </div>
+    <div class="chart-box" style="height:320px"><canvas id="monthlyChart"></canvas></div>
+  </div>
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title"><span class="ic">🎯</span> 월별 목표 달성률</div>
+    </div>
+    <div class="chart-box" style="height:320px"><canvas id="targetChart"></canvas></div>
+  </div>
+</div>
+
+<!-- YoY Growth + Profit -->
+<div class="grid2">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title"><span class="ic">📈</span> 전년 대비 성장률 추이</div>
+      <div class="card-badge">YoY %</div>
+    </div>
+    <div class="chart-box" style="height:240px"><canvas id="yoyChart"></canvas></div>
+  </div>
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title"><span class="ic">💎</span> 수익 구조 분석</div>
+    </div>
+    <div class="chart-box" style="height:180px"><canvas id="profitChart"></canvas></div>
+    <div class="profit-row">
+      <div class="profit-item">
+        <div class="profit-label">매출 총이익률</div>
+        <div class="profit-val" style="color:var(--green)">39.6%</div>
+      </div>
+      <div class="profit-item">
+        <div class="profit-label">매입 비율</div>
+        <div class="profit-val" style="color:var(--red)">60.4%</div>
+      </div>
+      <div class="profit-item">
+        <div class="profit-label">월평균 이익</div>
+        <div class="profit-val" style="color:var(--cyan)">6,430만</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Market / Ad List -->
+<div class="card" style="margin-bottom:18px">
+  <div class="card-header">
+    <div class="card-title"><span class="ic">🏪</span> 마켓 / 광고 채널별 매출 현황</div>
+    <div class="tabs">
+      <div class="tab active" onclick="filterMarkets('all',this)">전체</div>
+      <div class="tab" onclick="filterMarkets('market',this)">마켓</div>
+      <div class="tab" onclick="filterMarkets('ad',this)">광고</div>
+    </div>
+  </div>
+
+  <div class="market-grid" id="marketGrid"></div>
+</div>
+
+<!-- AI Insights -->
+<div class="card" style="margin-bottom:18px;border:1px solid rgba(159,122,250,.25);background:linear-gradient(135deg,var(--bg2),rgba(159,122,250,.03))">
+  <div class="card-header">
+    <div class="card-title"><span class="ic">🧠</span> AI 인사이트 분석</div>
+    <div class="card-badge" style="background:rgba(159,122,250,.15);color:var(--purple)">자동 분석</div>
+  </div>
+
+  <!-- Insight cards grid -->
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px">
+
+    <div style="background:var(--bg3);border-radius:12px;padding:18px;border-left:4px solid var(--green)">
+      <div style="font-size:11px;color:var(--green);font-weight:700;margin-bottom:8px">✅ 긍정 시그널</div>
+      <div style="font-size:13px;font-weight:700;margin-bottom:6px">전년 대비 매출 18.3% 성장</div>
+      <div style="font-size:12px;color:var(--t2);line-height:1.7">
+        1~3월 누적 매출이 전년 동기(4.11억) 대비 <b style="color:var(--green)">7,600만원 증가</b>했습니다. 특히 2월 매출이 전년 대비 17.9% 상승하며 가장 높은 성장세를 보였습니다.
+      </div>
+    </div>
+
+    <div style="background:var(--bg3);border-radius:12px;padding:18px;border-left:4px solid var(--orange)">
+      <div style="font-size:11px;color:var(--orange);font-weight:700;margin-bottom:8px">⚠️ 주의 사항</div>
+      <div style="font-size:13px;font-weight:700;margin-bottom:6px">3월 매출 전월 대비 11.8% 감소</div>
+      <div style="font-size:12px;color:var(--t2);line-height:1.7">
+        3월 매출(1.57억)이 2월(1.78억) 대비 하락했습니다. <b style="color:var(--orange)">스마트스토어(-14.6%)와 쿠팡(-13.3%)</b>이 주요 하락 채널입니다. 프로모션 종료 영향으로 보입니다.
+      </div>
+    </div>
+
+    <div style="background:var(--bg3);border-radius:12px;padding:18px;border-left:4px solid var(--blue)">
+      <div style="font-size:11px;color:var(--blue);font-weight:700;margin-bottom:8px">💡 기회 포착</div>
+      <div style="font-size:13px;font-weight:700;margin-bottom:6px">메타 광고 ROAS 414% 최고 효율</div>
+      <div style="font-size:12px;color:var(--t2);line-height:1.7">
+        메타(인스타/페북) 광고가 전 채널 중 <b style="color:var(--blue)">가장 높은 광고 수익률</b>을 기록 중입니다. 메타 예산을 확대하고 구글 Ads 예산을 재배분하는 것을 권장합니다.
+      </div>
+    </div>
+  </div>
+
+  <!-- Detailed Insights -->
+  <div style="background:var(--bg3);border-radius:12px;padding:20px;margin-bottom:14px">
+    <div style="font-size:13px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:6px">
+      <span style="color:var(--purple)">📊</span> 핵심 인사이트 상세
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;font-size:12px;color:var(--t2);line-height:1.9">
+      <div>
+        <div style="font-weight:700;color:var(--t1);margin-bottom:6px">매출 구조 분석</div>
+        <div>• <b>마켓 비중 72.5%</b> vs 광고 비중 27.5% → 마켓 의존도가 높은 구조</div>
+        <div>• 스마트스토어 + 쿠팡이 전체 매출의 <b style="color:var(--blue)">53.1%</b> 차지 (양대 채널 집중)</div>
+        <div>• 자사몰 비중이 2.4%로 매우 낮음 → <b style="color:var(--orange)">자사몰 활성화가 마진 개선의 열쇠</b></div>
+        <div>• 카카오쇼핑이 전월 대비 -9.5% 하락 → 별도 프로모션 전략 필요</div>
+      </div>
+      <div>
+        <div style="font-weight:700;color:var(--t1);margin-bottom:6px">수익성 분석</div>
+        <div>• 평균 매입률 60.4% → 업계 평균(55~65%) 범위 내 <b style="color:var(--green)">정상 수준</b></div>
+        <div>• 월평균 영업이익 6,430만원 → 연간 환산 시 <b style="color:var(--green)">약 7.7억원 예상</b></div>
+        <div>• 구글 Ads ROAS 250%로 <b style="color:var(--red)">손익분기 근접</b> → 최적화 또는 중단 검토</div>
+        <div>• 11번가 이익률이 타 마켓 대비 양호 → 수수료율 협상 효과 반영</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Action Items -->
+  <div style="background:var(--bg3);border-radius:12px;padding:20px">
+    <div style="font-size:13px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:6px">
+      <span style="color:var(--orange)">🎯</span> 액션 아이템 (우선순위순)
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px">
+      <div style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--bg4);border-radius:10px">
+        <div style="background:rgba(248,113,113,.15);color:var(--red);font-size:10px;font-weight:700;padding:3px 8px;border-radius:5px;white-space:nowrap;margin-top:1px">긴급</div>
+        <div style="font-size:12px;line-height:1.6;color:var(--t2)"><b style="color:var(--t1)">3월 매출 반등 전략 수립</b><br>스마트스토어·쿠팡 대상 긴급 프로모션 기획 (쿠폰, 번들 등)</div>
+      </div>
+      <div style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--bg4);border-radius:10px">
+        <div style="background:rgba(251,146,60,.15);color:var(--orange);font-size:10px;font-weight:700;padding:3px 8px;border-radius:5px;white-space:nowrap;margin-top:1px">높음</div>
+        <div style="font-size:12px;line-height:1.6;color:var(--t2)"><b style="color:var(--t1)">광고 예산 재분배</b><br>구글 Ads 예산 30% → 메타 광고로 이관 (ROAS 기준)</div>
+      </div>
+      <div style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--bg4);border-radius:10px">
+        <div style="background:rgba(76,141,255,.15);color:var(--blue);font-size:10px;font-weight:700;padding:3px 8px;border-radius:5px;white-space:nowrap;margin-top:1px">보통</div>
+        <div style="font-size:12px;line-height:1.6;color:var(--t2)"><b style="color:var(--t1)">자사몰 트래픽 확대</b><br>SNS → 자사몰 유입 캠페인으로 마진율 개선 (수수료 절감)</div>
+      </div>
+      <div style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--bg4);border-radius:10px">
+        <div style="background:rgba(76,141,255,.15);color:var(--blue);font-size:10px;font-weight:700;padding:3px 8px;border-radius:5px;white-space:nowrap;margin-top:1px">보통</div>
+        <div style="font-size:12px;line-height:1.6;color:var(--t2)"><b style="color:var(--t1)">매입 원가 협상</b><br>Q2 대량 발주 시 단가 인하 협상으로 매입률 58% 이하 목표</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Forecast -->
+  <div style="margin-top:14px;background:var(--bg3);border-radius:12px;padding:20px">
+    <div style="font-size:13px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:6px">
+      <span style="color:var(--cyan)">🔮</span> 연말 매출 전망
+    </div>
+    <div style="display:flex;gap:14px;align-items:center">
+      <div style="flex:1">
+        <div style="font-size:12px;color:var(--t2);line-height:1.8">
+          현재 추세(월평균 1.62억) 유지 시 → 연 매출 <b style="color:var(--cyan);font-size:16px">약 19.5억원</b> 예상<br>
+          연간 목표(18억) 대비 <b style="color:var(--green)">108.3% 달성 전망</b> (성장세 유지 전제)<br>
+          단, 3월 하락 추세가 지속될 경우 → <b style="color:var(--orange)">약 17.2억원</b>으로 목표 미달 리스크
+        </div>
+      </div>
+      <div style="text-align:center;padding:16px 24px;background:var(--bg4);border-radius:12px;min-width:140px">
+        <div style="font-size:10px;color:var(--t3);margin-bottom:4px">예상 연매출</div>
+        <div style="font-size:28px;font-weight:800;color:var(--cyan)">19.5억</div>
+        <div style="font-size:11px;color:var(--green);font-weight:600">목표 초과 달성 ✓</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Recommendations -->
+<div class="card" style="margin-bottom:18px">
+  <div class="card-header">
+    <div class="card-title"><span class="ic">💡</span> 추천 추가 지표</div>
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">
+    <div class="rec-badge">📦 재고 회전율</div>
+    <div class="rec-badge">👥 고객 획득 비용(CAC)</div>
+    <div class="rec-badge">🔄 재구매율</div>
+    <div class="rec-badge">💳 객단가 추이</div>
+    <div class="rec-badge">📊 채널별 ROAS</div>
+    <div class="rec-badge">📅 결제 미수금 현황</div>
+  </div>
+  <div style="font-size:13px;color:var(--t2);line-height:2">
+    <b style="color:var(--purple)">추천 사항:</b><br>
+    • <b>채널별 ROAS(광고 수익률)</b> — 각 광고 채널에 투입한 비용 대비 매출을 추적하면 예산 최적화에 도움됩니다<br>
+    • <b>객단가 추이</b> — 월별 평균 주문 금액 변화를 보면 프로모션 효과를 측정할 수 있습니다<br>
+    • <b>재구매율</b> — 신규 vs 재구매 고객 비율로 고객 충성도를 파악할 수 있습니다<br>
+    • <b>재고 회전율</b> — 매입 대비 판매 속도를 추적하면 과잉 재고·품절 리스크를 줄일 수 있습니다<br>
+    • <b>미수금 현황</b> — 마켓별 정산 주기가 다르므로 실제 입금 현황을 별도 관리하면 현금흐름 파악에 유리합니다<br>
+    • <b>카테고리별 마진율</b> — 제품 카테고리마다 마진이 다르므로, 고마진 제품 비중 관리가 수익성 개선의 핵심입니다
+  </div>
+</div>
+
+</div><!-- /container -->
+
+<script>
+// -- DATA --
+const MONTHS = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+const CURRENT_MONTH = 2; // 0-indexed, March = 2
+
+// Monthly sales & purchase (만원) - Jan~Mar actual, rest projected
+const monthlySales =    [15200, 17800, 15700, 0,0,0,0,0,0,0,0,0];
+const monthlyPurchase = [9100, 10700, 9500, 0,0,0,0,0,0,0,0,0];
+const monthlyProfit =   monthlySales.map((s,i)=> s - monthlyPurchase[i]);
+const lastYearSales =   [12800, 15100, 13200, 14500, 16200, 17800, 15600, 18200, 19500, 20100, 22300, 24800];
+const monthlyTarget =   [15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000];
+
+// Market / Ad channels data
+const markets = [
+  {
+    name: '스마트스토어', type: 'market', color: '#2DB400', status: 'active',
+    monthlySales: [4200, 4800, 4100],
+    monthlyPurchase: [2520, 2880, 2460],
+    target: 5000,
+    dailySales: {
+      '3월': [180,210,195,220,160,0,0, 205,230,180,195,240,0,0, 220,185,210,0,0,0,0, 0,0,0,0,0,0,0, 0,0,0]
+    }
+  },
+  {
+    name: '쿠팡', type: 'market', color: '#E52528', status: 'active',
+    monthlySales: [3800, 4500, 3900],
+    monthlyPurchase: [2280, 2700, 2340],
+    target: 4500,
+    dailySales: {
+      '3월': [150,170,185,160,195,0,0, 180,210,165,175,200,0,0, 190,170,185,0,0,0,0, 0,0,0,0,0,0,0, 0,0,0]
+    }
+  },
+  {
+    name: '카카오쇼핑', type: 'market', color: '#FEE500', status: 'active',
+    monthlySales: [1800, 2100, 1900],
+    monthlyPurchase: [1080, 1260, 1140],
+    target: 2500,
+    dailySales: {
+      '3월': [70,85,90,65,80,0,0, 95,78,82,88,75,0,0, 80,90,72,0,0,0,0, 0,0,0,0,0,0,0, 0,0,0]
+    }
+  },
+  {
+    name: '11번가', type: 'market', color: '#FF5722', status: 'active',
+    monthlySales: [1200, 1500, 1300],
+    monthlyPurchase: [720, 900, 780],
+    target: 1800,
+    dailySales: {
+      '3월': [50,55,60,48,65,0,0, 52,58,62,45,55,0,0, 60,48,52,0,0,0,0, 0,0,0,0,0,0,0, 0,0,0]
+    }
+  },
+  {
+    name: '메타(인스타/페북)', type: 'ad', color: '#1877F2', status: 'active',
+    monthlySales: [1800, 2200, 2000],
+    monthlyPurchase: [1080, 1320, 1200],
+    adSpend: [450, 520, 480],
+    target: 2500,
+    dailySales: {
+      '3월': [75,82,90,68,85,0,0, 88,95,78,82,90,0,0, 85,92,70,0,0,0,0, 0,0,0,0,0,0,0, 0,0,0]
+    }
+  },
+  {
+    name: '네이버 검색광고', type: 'ad', color: '#03C75A', status: 'active',
+    monthlySales: [1500, 1700, 1600],
+    monthlyPurchase: [900, 1020, 960],
+    adSpend: [380, 410, 390],
+    target: 2000,
+    dailySales: {
+      '3월': [60,65,72,55,68,0,0, 70,75,58,62,72,0,0, 68,60,65,0,0,0,0, 0,0,0,0,0,0,0, 0,0,0]
+    }
+  },
+  {
+    name: '구글 Ads', type: 'ad', color: '#4285F4', status: 'paused',
+    monthlySales: [500, 600, 550],
+    monthlyPurchase: [300, 360, 330],
+    adSpend: [200, 240, 220],
+    target: 800,
+    dailySales: {
+      '3월': [20,22,25,18,24,0,0, 22,28,20,18,25,0,0, 24,20,22,0,0,0,0, 0,0,0,0,0,0,0, 0,0,0]
+    }
+  },
+  {
+    name: '자사몰', type: 'market', color: '#8B5CF6', status: 'active',
+    monthlySales: [400, 400, 350],
+    monthlyPurchase: [220, 220, 190],
+    target: 600,
+    dailySales: {
+      '3월': [12,15,18,10,14,0,0, 16,20,12,14,18,0,0, 15,12,14,0,0,0,0, 0,0,0,0,0,0,0, 0,0,0]
+    }
+  },
+];
+
+// -- Update time --
+document.getElementById('lastUpdate').textContent = '최종 업데이트: ' + new Date().toLocaleString('ko-KR');
+
+// -- Chart Defaults --
+Chart.defaults.color = '#687590';
+Chart.defaults.borderColor = '#253045';
+Chart.defaults.font.family = "'Noto Sans KR', system-ui, sans-serif";
+
+// ===== 1. Monthly Sales/Purchase Chart =====
+new Chart(document.getElementById('monthlyChart'), {
+  type: 'bar',
+  data: {
+    labels: MONTHS.slice(0, CURRENT_MONTH + 1),
+    datasets: [
+      {
+        label: '매출',
+        data: monthlySales.slice(0, CURRENT_MONTH + 1),
+        backgroundColor: 'rgba(76,141,255,.65)',
+        borderRadius: 6, borderSkipped: false, barPercentage: .35, categoryPercentage: .7, order: 2
+      },
+      {
+        label: '매입',
+        data: monthlyPurchase.slice(0, CURRENT_MONTH + 1),
+        backgroundColor: 'rgba(248,113,113,.55)',
+        borderRadius: 6, borderSkipped: false, barPercentage: .35, categoryPercentage: .7, order: 3
+      },
+      {
+        label: '이익',
+        data: monthlyProfit.slice(0, CURRENT_MONTH + 1),
+        type: 'line',
+        borderColor: '#34d399',
+        backgroundColor: 'rgba(52,211,153,.08)',
+        fill: true, tension: .4, pointRadius: 5, pointBackgroundColor: '#34d399', borderWidth: 2.5, order: 1
+      },
+      {
+        label: '작년 매출',
+        data: lastYearSales.slice(0, CURRENT_MONTH + 1),
+        type: 'line',
+        borderColor: '#4a5568',
+        borderDash: [6,4],
+        pointRadius: 3, pointBackgroundColor: '#4a5568', borderWidth: 1.5, order: 0
+      }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + ctx.raw.toLocaleString() + '만원' } }
+    },
+    scales: {
+      y: { grid: { color: '#1c2333' }, ticks: { callback: v => (v/10000).toFixed(1) + '억', font: { size: 11 } } },
+      x: { grid: { display: false } }
+    }
+  }
+});
+
+// ===== 2. Target Chart =====
+const targetPct = monthlySales.slice(0, CURRENT_MONTH + 1).map((s,i) => Math.round(s / monthlyTarget[i] * 100));
+new Chart(document.getElementById('targetChart'), {
+  type: 'bar',
+  data: {
+    labels: MONTHS.slice(0, CURRENT_MONTH + 1),
+    datasets: [{
+      label: '달성률',
+      data: targetPct,
+      backgroundColor: targetPct.map(p => p >= 100 ? 'rgba(52,211,153,.65)' : p >= 80 ? 'rgba(76,141,255,.65)' : 'rgba(251,146,60,.65)'),
+      borderRadius: 8, borderSkipped: false, barThickness: 40,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: { callbacks: { label: ctx => '달성률: ' + ctx.raw + '%' } },
+    },
+    scales: {
+      y: {
+        max: 140,
+        grid: { color: '#1c2333' },
+        ticks: { callback: v => v + '%', font: { size: 11 } },
+      },
+      x: { grid: { display: false } }
+    }
+  },
+  plugins: [{
+    id: 'targetLine',
+    afterDraw(chart) {
+      const { ctx, chartArea: {left, right}, scales: {y} } = chart;
+      const yPos = y.getPixelForValue(100);
+      ctx.save();
+      ctx.setLineDash([6,4]);
+      ctx.strokeStyle = '#f87171';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(left, yPos); ctx.lineTo(right, yPos); ctx.stroke();
+      ctx.fillStyle = '#f87171'; ctx.font = '600 11px Noto Sans KR';
+      ctx.fillText('목표 100%', right - 62, yPos - 6);
+      ctx.restore();
+    }
+  }]
+});
+
+// ===== 3. YoY Growth Chart =====
+const yoyGrowth = monthlySales.slice(0, CURRENT_MONTH + 1).map((s,i) => Math.round((s - lastYearSales[i]) / lastYearSales[i] * 1000) / 10);
+new Chart(document.getElementById('yoyChart'), {
+  type: 'line',
+  data: {
+    labels: MONTHS.slice(0, CURRENT_MONTH + 1),
+    datasets: [{
+      label: '성장률',
+      data: yoyGrowth,
+      borderColor: '#fb923c',
+      backgroundColor: 'rgba(251,146,60,.08)',
+      fill: true, tension: .4, pointRadius: 6, pointBackgroundColor: '#fb923c',
+      borderWidth: 2.5,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: { callbacks: { label: ctx => '성장률: +' + ctx.raw + '%' } },
+    },
+    scales: {
+      y: { grid: { color: '#1c2333' }, ticks: { callback: v => v + '%', font: { size: 11 } } },
+      x: { grid: { display: false } }
+    }
+  },
+  plugins: [{
+    id: 'zeroLine',
+    afterDraw(chart) {
+      const { ctx, chartArea: {left, right}, scales: {y} } = chart;
+      const yPos = y.getPixelForValue(0);
+      ctx.save(); ctx.strokeStyle = '#4a5568'; ctx.lineWidth = 1;
+      ctx.setLineDash([4,4]);
+      ctx.beginPath(); ctx.moveTo(left, yPos); ctx.lineTo(right, yPos); ctx.stroke();
+      ctx.restore();
+    }
+  }]
+});
+
+// ===== 4. Profit Donut =====
+const totalSales = monthlySales.slice(0,CURRENT_MONTH+1).reduce((a,b)=>a+b,0);
+const totalPurchase = monthlyPurchase.slice(0,CURRENT_MONTH+1).reduce((a,b)=>a+b,0);
+new Chart(document.getElementById('profitChart'), {
+  type: 'doughnut',
+  data: {
+    labels: ['매입 원가', '영업이익'],
+    datasets: [{
+      data: [totalPurchase, totalSales - totalPurchase],
+      backgroundColor: ['rgba(248,113,113,.6)', 'rgba(52,211,153,.6)'],
+      borderColor: '#161b26', borderWidth: 3, hoverOffset: 6
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false, cutout: '68%',
+    plugins: {
+      legend: { position: 'bottom', labels: { padding: 12, boxWidth: 10, font: { size: 11 } } },
+      tooltip: { callbacks: { label: ctx => ctx.label + ': ' + ctx.raw.toLocaleString() + '만원' } }
+    }
+  }
+});
+
+// ===== 5. Market / Ad Grid =====
+function renderMarkets(filter) {
+  const grid = document.getElementById('marketGrid');
+  const filtered = filter === 'all' ? markets : markets.filter(m => m.type === filter);
+
+  grid.innerHTML = filtered.map((m, i) => {
+    const total = m.monthlySales.reduce((a,b) => a+b, 0);
+    const curMonth = m.monthlySales[CURRENT_MONTH] || 0;
+    const pct = Math.round(curMonth / m.target * 100);
+    const purchase = m.monthlyPurchase.reduce((a,b) => a+b, 0);
+    const profit = total - purchase;
+    const profitRate = Math.round(profit / total * 100);
+    const statusLabel = {active:'운영중',paused:'일시중지',ended:'종료'}[m.status];
+    const roas = m.adSpend ? (total / m.adSpend.reduce((a,b)=>a+b,0) * 100).toFixed(0) : null;
+
+    const barColor = m.color;
+
+    // Daily sales table for detail
+    const dailyData = m.dailySales['3월'] || [];
+    const dailyRows = dailyData.map((d, di) => {
+      if (d === 0) return '';
+      return `<tr><td>${di+1}일</td><td class="num">${d.toLocaleString()}만</td><td class="num" style="color:var(--t3)">${Math.round(d*0.6).toLocaleString()}만</td><td class="num" style="color:var(--green)">${Math.round(d*0.4).toLocaleString()}만</td></tr>`;
+    }).filter(Boolean).join('');
+
+    return `
+      <div class="market-card" data-type="${m.type}" data-idx="${i}" onclick="toggleDetail(this)">
+        <div class="mc-top">
+          <div class="mc-name"><span style="color:${m.color}">●</span> ${m.name}</div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div class="mc-status ${m.status}">${statusLabel}</div>
+            <span class="mc-expand-icon">▼</span>
+          </div>
+        </div>
+        <div class="mc-row"><span class="mc-label">3월 매출</span><span class="mc-val">${curMonth.toLocaleString()}만</span></div>
+        <div class="mc-row"><span class="mc-label">누적 매출</span><span class="mc-val">${total.toLocaleString()}만</span></div>
+        <div class="mc-row"><span class="mc-label">이익률</span><span class="mc-val" style="color:var(--green)">${profitRate}%</span></div>
+        ${roas ? `<div class="mc-row"><span class="mc-label">ROAS</span><span class="mc-val" style="color:var(--cyan)">${roas}%</span></div>` : ''}
+        <div class="mc-row"><span class="mc-label">목표 달성</span><span class="mc-val" style="color:${pct>=100?'var(--green)':pct>=70?'var(--blue)':'var(--orange)'}">${pct}%</span></div>
+        <div class="mc-bar"><div class="mc-bar-fill" style="width:${Math.min(pct,100)}%;background:${barColor}"></div></div>
+
+        <div class="detail-panel">
+          <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+            <div style="font-size:12px;font-weight:700;margin-bottom:10px;color:var(--t2)">📅 3월 일자별 매출 상세</div>
+            <div class="detail-chart"><canvas id="detail-chart-${i}"></canvas></div>
+            <div style="max-height:200px;overflow-y:auto;border-radius:8px;border:1px solid var(--border)">
+              <table class="tbl detail-tbl" style="width:100%">
+                <thead><tr><th>일자</th><th style="text-align:right">매출</th><th style="text-align:right">매입</th><th style="text-align:right">이익</th></tr></thead>
+                <tbody>${dailyRows}</tbody>
+              </table>
+            </div>
+            <div style="display:flex;gap:10px;margin-top:12px">
+              <div style="flex:1;background:var(--bg4);border-radius:8px;padding:10px;text-align:center">
+                <div style="font-size:10px;color:var(--t3)">1월</div>
+                <div style="font-size:16px;font-weight:700;color:var(--blue)">${m.monthlySales[0]?.toLocaleString() || 0}만</div>
+              </div>
+              <div style="flex:1;background:var(--bg4);border-radius:8px;padding:10px;text-align:center">
+                <div style="font-size:10px;color:var(--t3)">2월</div>
+                <div style="font-size:16px;font-weight:700;color:var(--blue)">${m.monthlySales[1]?.toLocaleString() || 0}만</div>
+              </div>
+              <div style="flex:1;background:var(--bg4);border-radius:8px;padding:10px;text-align:center">
+                <div style="font-size:10px;color:var(--t3)">3월</div>
+                <div style="font-size:16px;font-weight:700;color:var(--blue)">${curMonth.toLocaleString()}만</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function toggleDetail(card) {
+  const wasExpanded = card.classList.contains('expanded');
+  // close all
+  document.querySelectorAll('.market-card.expanded').forEach(c => c.classList.remove('expanded'));
+
+  if (!wasExpanded) {
+    card.classList.add('expanded');
+    const idx = parseInt(card.dataset.idx);
+    const m = markets[idx];
+    const canvasId = 'detail-chart-' + idx;
+    const canvas = document.getElementById(canvasId);
+    if (canvas) {
+      // Destroy existing chart if any
+      const existing = Chart.getChart(canvas);
+      if (existing) existing.destroy();
+
+      const daily = m.dailySales['3월'] || [];
+      const labels = daily.map((_, i) => (i+1) + '일').filter((_, i) => daily[i] > 0);
+      const data = daily.filter(d => d > 0);
+
+      new Chart(canvas, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            label: '일별 매출',
+            data,
+            backgroundColor: m.color + '99',
+            borderRadius: 4,
+            borderSkipped: false,
+            barThickness: 18,
+          }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ctx.raw + '만원' } } },
+          scales: {
+            y: { grid: { color: '#253045' }, ticks: { callback: v => v + '만', font: { size: 10 } } },
+            x: { grid: { display: false }, ticks: { font: { size: 10 } } }
+          }
+        }
+      });
+    }
+  }
+}
+
+function filterMarkets(type, el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  renderMarkets(type);
+}
+
+renderMarkets('all');
+</script>
+</body>
+</html>
