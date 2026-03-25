@@ -137,6 +137,34 @@
   ::-webkit-scrollbar-track{background:var(--bg1)}
   ::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:3px}
 
+  /* Calendar */
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+  .cal-header{font-size:11px;font-weight:600;color:var(--t3);text-align:center;padding:8px 0}
+  .cal-header:first-child{color:var(--red)}
+  .cal-header:last-child{color:var(--blue)}
+  .cal-cell{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:8px;min-height:72px;transition:all .2s;cursor:default}
+  .cal-cell:hover{border-color:var(--blue)}
+  .cal-cell.empty{background:transparent;border-color:transparent}
+  .cal-cell.today{border-color:var(--blue);background:rgba(76,141,255,.08);box-shadow:0 0 12px rgba(76,141,255,.15)}
+  .cal-cell.weekend{opacity:.6}
+  .cal-day{font-size:12px;font-weight:700;margin-bottom:4px}
+  .cal-cell.today .cal-day{color:var(--blue)}
+  .cal-cell:first-child .cal-day{color:var(--red)}
+  .cal-cell:nth-child(7n) .cal-day{color:var(--blue)}
+  .cal-amount{font-size:11px;font-weight:700;color:var(--green)}
+  .cal-amount.zero{color:var(--t4);font-weight:400}
+  .cal-bar{height:3px;border-radius:2px;margin-top:4px;background:var(--bg4);overflow:hidden}
+  .cal-bar-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--blue),var(--cyan))}
+  .cal-nav{display:flex;align-items:center;gap:16px}
+  .cal-nav-btn{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:6px 12px;color:var(--t2);cursor:pointer;font-size:13px;transition:all .2s}
+  .cal-nav-btn:hover{border-color:var(--blue);color:var(--blue)}
+  .cal-month{font-size:16px;font-weight:700}
+  .cal-legend{display:flex;gap:16px;font-size:11px;color:var(--t3)}
+  .cal-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:16px}
+  .cal-stat{background:var(--bg3);border-radius:10px;padding:14px;text-align:center}
+  .cal-stat-label{font-size:10px;color:var(--t3);margin-bottom:4px}
+  .cal-stat-val{font-size:18px;font-weight:800}
+
   @media(max-width:1100px){
     .kpi-row{grid-template-columns:repeat(3,1fr)}
     .grid2,.grid3{grid-template-columns:1fr}
@@ -265,6 +293,20 @@
       </div>
     </div>
   </div>
+</div>
+
+<!-- Calendar -->
+<div class="card" style="margin-bottom:18px">
+  <div class="card-header">
+    <div class="card-title"><span class="ic">📅</span> 일별 매출 캘린더</div>
+    <div class="cal-nav">
+      <button class="cal-nav-btn" onclick="changeCalMonth(-1)">◀</button>
+      <div class="cal-month" id="calMonthLabel">2026년 3월</div>
+      <button class="cal-nav-btn" onclick="changeCalMonth(1)">▶</button>
+    </div>
+  </div>
+  <div class="cal-grid" id="calGrid"></div>
+  <div class="cal-summary" id="calSummary"></div>
 </div>
 
 <!-- Market / Ad List -->
@@ -789,6 +831,105 @@ function filterMarkets(type, el) {
 }
 
 renderMarkets('all');
+
+// ===== 6. Calendar =====
+let calYear = 2026, calMonth = 2; // 0-indexed March
+
+function getDailyTotals(monthIdx) {
+  // Aggregate daily sales across all channels for the given month index (0=Jan,1=Feb,2=Mar)
+  const monthKey = (monthIdx + 1) + '월';
+  const days = monthIdx === 2 ? 31 : monthIdx === 1 ? 28 : 31; // 2026 specific
+  const totals = new Array(days).fill(0);
+  markets.forEach(m => {
+    const daily = m.dailySales[monthKey];
+    if (daily) {
+      daily.forEach((v, i) => { if (i < days) totals[i] += v; });
+    }
+  });
+  return totals;
+}
+
+function renderCalendar() {
+  const grid = document.getElementById('calGrid');
+  const label = document.getElementById('calMonthLabel');
+  const summaryEl = document.getElementById('calSummary');
+
+  label.textContent = calYear + '년 ' + (calMonth + 1) + '월';
+
+  const firstDay = new Date(calYear, calMonth, 1).getDay(); // 0=Sun
+  const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+  const today = new Date();
+  const isCurrentMonth = today.getFullYear() === calYear && today.getMonth() === calMonth;
+  const todayDate = today.getDate();
+
+  // Get daily totals
+  const dailyTotals = getDailyTotals(calMonth);
+  const maxVal = Math.max(...dailyTotals.filter(v => v > 0), 1);
+
+  // Headers
+  const headers = ['일','월','화','수','목','금','토'];
+  let html = headers.map(h => `<div class="cal-header">${h}</div>`).join('');
+
+  // Empty cells before first day
+  for (let i = 0; i < firstDay; i++) {
+    html += '<div class="cal-cell empty"></div>';
+  }
+
+  // Day cells
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dayOfWeek = (firstDay + d - 1) % 7;
+    const isToday = isCurrentMonth && d === todayDate;
+    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+    const val = dailyTotals[d - 1] || 0;
+    const barWidth = val > 0 ? Math.round(val / maxVal * 100) : 0;
+
+    let cls = 'cal-cell';
+    if (isToday) cls += ' today';
+    if (isWeekend && !isToday) cls += ' weekend';
+
+    html += `<div class="${cls}">
+      <div class="cal-day">${d}</div>
+      <div class="cal-amount ${val === 0 ? 'zero' : ''}">${val > 0 ? val.toLocaleString() + '만' : '-'}</div>
+      ${val > 0 ? `<div class="cal-bar"><div class="cal-bar-fill" style="width:${barWidth}%"></div></div>` : ''}
+    </div>`;
+  }
+
+  grid.innerHTML = html;
+
+  // Summary stats
+  const activeDays = dailyTotals.filter(v => v > 0);
+  const totalSalesMonth = dailyTotals.reduce((a, b) => a + b, 0);
+  const avgDaily = activeDays.length > 0 ? Math.round(totalSalesMonth / activeDays.length) : 0;
+  const bestDay = dailyTotals.indexOf(Math.max(...dailyTotals)) + 1;
+  const bestVal = Math.max(...dailyTotals);
+
+  summaryEl.innerHTML = `
+    <div class="cal-stat">
+      <div class="cal-stat-label">월 합계</div>
+      <div class="cal-stat-val" style="color:var(--blue)">${totalSalesMonth > 0 ? totalSalesMonth.toLocaleString() + '만' : '-'}</div>
+    </div>
+    <div class="cal-stat">
+      <div class="cal-stat-label">영업일 수</div>
+      <div class="cal-stat-val" style="color:var(--green)">${activeDays.length}일</div>
+    </div>
+    <div class="cal-stat">
+      <div class="cal-stat-label">일 평균</div>
+      <div class="cal-stat-val" style="color:var(--purple)">${avgDaily > 0 ? avgDaily.toLocaleString() + '만' : '-'}</div>
+    </div>
+    <div class="cal-stat">
+      <div class="cal-stat-label">최고 매출일</div>
+      <div class="cal-stat-val" style="color:var(--orange)">${bestVal > 0 ? bestDay + '일' : '-'}</div>
+    </div>`;
+}
+
+function changeCalMonth(delta) {
+  calMonth += delta;
+  if (calMonth > 11) { calMonth = 0; calYear++; }
+  if (calMonth < 0) { calMonth = 11; calYear--; }
+  renderCalendar();
+}
+
+renderCalendar();
 </script>
 </body>
 </html>
